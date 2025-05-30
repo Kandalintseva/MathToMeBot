@@ -1,15 +1,10 @@
-from telegram import Update
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    filters
-)
+import telebot
+from telebot import types
 import sqlite3
 from config import TOKEN, ADMIN_ID
 
+# Инициализация бота
+bot = telebot.TeleBot(TOKEN)
 
 # Инициализация базы данных
 def init_db():
@@ -38,25 +33,27 @@ def init_db():
     conn.commit()
     conn.close()
 
-
 # Инициализируем БД
 init_db()
 
-
 # Обработчик команды /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет! Я бот-репетитор по математике. Отправь мне задачу на проверку.")
+@bot.message_handler(commands=['start'])
+def start(message):
+    bot.reply_to(message, "Привет! Я бот-репетитор по математике. Отправь мне задачу на проверку.")
 
+# Обработчик текстовых сообщений и фото
+@bot.message_handler(content_types=['text', 'photo'])
+def handle_task(message):
+    user_id = message.from_user.id
+    task_text = message.text if message.text else "Фото задачи"
 
-# Обработчик задач
-async def handle_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    task_text = update.message.text if update.message.text else "Фото задачи"
-
-    if update.message.photo:
-        photo = await update.message.photo[-1].get_file()
+    if message.photo:
+        photo = message.photo[-1]
+        file_info = bot.get_file(photo.file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
         photo_path = f"tasks/{user_id}_{photo.file_id}.jpg"
-        await photo.download_to_drive(photo_path)
+        with open(photo_path, 'wb') as new_file:
+            new_file.write(downloaded_file)
     else:
         photo_path = None
 
@@ -67,20 +64,21 @@ async def handle_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.commit()
     conn.close()
 
-    await context.bot.send_message(
-        chat_id=ADMIN_ID,
-        text=f"Новая задача от ученика {user_id}!\nТекст: {task_text}"
+    bot.send_message(
+        ADMIN_ID,
+        f"Новая задача от ученика {user_id}!\nТекст: {task_text}"
     )
 
-    await update.message.reply_text("✅ Задача отправлена на проверку!")
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("Проверить задачу", callback_data=f"check_{cursor.lastrowid}"))
+    bot.send_message(ADMIN_ID, "Выберите действие:", reply_markup=markup)
 
+    bot.reply_to(message, "✅ Задача отправлена на проверку!")
 
 # Обработчик кнопок
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    data = query.data.split('_')
+@bot.callback_query_handler(func=lambda call: True)
+def button_callback(call):
+    data = call.data.split('_')
     action, task_id = data[0], data[1]
 
     conn = sqlite3.connect('tutor_bot.db')
@@ -88,29 +86,20 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if action == "correct":
         cursor.execute("UPDATE tasks SET status='correct' WHERE task_id=?", (task_id,))
-        await query.edit_message_text("✅ Задача верна!")
+        bot.edit_message_text(chat_id=call.message.chat.id,
+                             message_id=call.message.message_id,
+                             text="✅ Задача верна!")
     else:
         cursor.execute("UPDATE tasks SET status='incorrect' WHERE task_id=?", (task_id,))
-        await query.edit_message_text("❌ Задача неверна, отправлена на доработку.")
+        bot.edit_message_text(chat_id=call.message.chat.id,
+                             message_id=call.message.message_id,
+                             text="❌ Задача неверна, отправлена на доработку.")
         user_id = cursor.execute("SELECT user_id FROM tasks WHERE task_id=?", (task_id,)).fetchone()[0]
-        await context.bot.send_message(chat_id=user_id, text="Исправь ошибки и отправь задачу снова!")
+        bot.send_message(chat_id=user_id, text="Исправь ошибки и отправь задачу снова!")
 
     conn.commit()
     conn.close()
 
-
-def main():
-    # Создаем Application
-    application = Application.builder().token(TOKEN).build()
-
-    # Регистрируем обработчики
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, handle_task))
-    application.add_handler(CallbackQueryHandler(button_callback))
-
-    # Запускаем бота
-    application.run_polling()
-
-
+# Запуск бота
 if __name__ == "__main__":
-    main()
+    bot.infinity_polling()
