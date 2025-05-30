@@ -15,6 +15,22 @@ if not TOKEN:
 
 bot = telebot.TeleBot(TOKEN)
 
+
+import telebot
+import time
+
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+bot = telebot.TeleBot(TOKEN, threaded=False)  # Отключаем многопоточность
+
+try:
+    while True:
+        try:
+            bot.polling(none_stop=True, timeout=60)
+        except Exception as e:
+            print(f"Ошибка: {e}")
+            time.sleep(10)  # Пауза перед перезапуском
+except KeyboardInterrupt:
+    print("Бот остановлен") 
 # Создаем папку для заданий
 os.makedirs('tasks', exist_ok=True)
 
