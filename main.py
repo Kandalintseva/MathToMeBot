@@ -1,11 +1,11 @@
 import telebot
 from telebot import types
 import sqlite3
-from datetime import datetime
+from config import TOKEN, ADMIN_ID
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from config import TOKEN, ADMIN_ID
+
 
 # Конфигурация
 
