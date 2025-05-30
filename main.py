@@ -5,6 +5,13 @@ from config import TOKEN, ADMIN_ID
 
 bot = telebot.TeleBot(TOKEN)
 
+
+
+@bot.message_handler(commands=['getdb'], func=lambda m: m.from_user.id == ADMIN_ID)
+def send_db_file(message):
+    with open('tutor_bot.db', 'rb') as f:
+        bot.send_document(message.chat.id, f)
+ 
 # Инициализация базы данных
 def init_db():
     conn = sqlite3.connect('tutor_bot.db')
