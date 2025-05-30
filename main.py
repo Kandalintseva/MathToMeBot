@@ -1,11 +1,12 @@
 import telebot
 from telebot import types
 import sqlite3
-from config import TOKEN, ADMIN_ID
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
+import os
+TOKEN = os.environ['TOKEN']
+ADMIN_ID = int(os.environ['ADMIN_ID'])
 
 # Конфигурация
 
